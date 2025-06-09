@@ -18,10 +18,16 @@ This research demonstrates that point clouds can effectively serve as final 3D r
 The code is organized into two parts:
 ### Construct Building Point Cloud from Floor plan: 
 This part can be found in [ConstructPC.ipynb](ConstructPC.ipynb), which involves the first three steps of the pipeline: 
+
 (1) parsing the scanned image of the floor plans using image processing to extract cadastral room boundary polygons; 
+
 (2) segmenting AHN point cloud 
+
 (3) generating synthetic point clouds by extruding floor plan polygons and aligning them with AHN; 
+
 ### Visualize 3D LAS:
 This second part is documented in [3DLASWeb](3DLASWeb) involving the last two steps of the pipeline:
+
 (4) storing these 3D spatial units in a PostgreSQL-based database following the ISO 19152:2024 \ac{LADM}; and 
+
 (5) developing a web-based 3D LAS using Vue.js, Cesium, and FastAPI for visualization and interaction.
