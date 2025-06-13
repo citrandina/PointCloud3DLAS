@@ -25,9 +25,22 @@ This part can be found in [ConstructPC.ipynb](ConstructPC.ipynb), which involves
 
 (3) generating synthetic point clouds by extruding floor plan polygons and aligning them with AHN; 
 
+
 ### Visualize 3D LAS:
 This second part is documented in [3DLASWeb](3DLASWeb) involving the last two steps of the pipeline:
 
 (4) storing these 3D spatial units in a PostgreSQL-based database following the ISO 19152:2024 \ac{LADM}; and 
 
 (5) developing a web-based 3D LAS using Vue.js, Cesium, and FastAPI for visualization and interaction.
+
+To run the web program:
+1. Load the database in pgAdmin
+2. Upload the output LAZ file from the previous step into [CesiumION](https://ion.cesium.com/addasset) (or use the existing dataset) 
+3. In terminal:
+   <pre><code>cd 3DLASWeb
+uvicorn pgquery:app --reload
+</code></pre>
+3. In terminal: 
+<pre><code>npm run dev </code></pre>
+
+
