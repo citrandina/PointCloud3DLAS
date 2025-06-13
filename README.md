@@ -34,13 +34,42 @@ This second part is documented in [3DLASWeb](3DLASWeb) involving the last two st
 (5) developing a web-based 3D LAS using Vue.js, Cesium, and FastAPI for visualization and interaction.
 
 To run the web program:
-1. Load the database in pgAdmin
-2. Upload the output LAZ file from the previous step into [CesiumION](https://ion.cesium.com/addasset) (or use the existing dataset) 
-3. In terminal:
-   <pre><code>cd 3DLASWeb
-uvicorn pgquery:app --reload
-</code></pre>
-3. In terminal: 
-<pre><code>npm run dev </code></pre>
+1. Set the database in pgAdmin
+   1. download the sample database in [OneDrive](https://tud365-my.sharepoint.com/:u:/r/personal/candinasari_tudelft_nl/Documents/data%20thesis/ladm_sample.sql?csf=1&web=1&e=b21AQC)
+   2. create new database and import the database. in cmd, run:
+   ```sh
+   createdb -U postgres ladm_data
+   pg_restore -U postgres -d ladm_data ladm_sample.sql
+   ```
+   3. to import your new csv output from previous method:
+   ```sh
+   #Import the output csv in synth_pc table
+   COPY synth_pc (point_id, room_id, floor_number, x, y, z, name, su_id, area, k_id)
+   FROM output_pc
+   DELIMITER ',' 
+   CSV HEADER;
+   
+   #Create the geom column for pc
+   UPDATE synth_pc
+   SET geom = ST_Transform(
+       ST_SetSRID(ST_MakePoint(x, y, z), 28992),
+       4326
+   )
+   WHERE geom IS NULL;
 
+   #create and import your own su data based on the output_pc
+   COPY la_su_table
+   FROM su_output_pc
+   DELIMITER ',' 
+   CSV HEADER;
+   ```
+2. Upload the output LAZ file from the previous step into [CesiumION](https://ion.cesium.com/addasset) (or use the existing dataset). Remember to change the ```Ion.defaultAccessToken ``` in [App.vue](3DLASWeb/src/App.vue)
+3. In terminal:
+   ```sh
+   cd 3DLASWeb
+   npm run dev   
+   uvicorn pgquery:app --reload
+   ```
+4. To modify the front-end interface, edit [App.vue](3DLASWeb/src/App.vue). the syle can be changed in [LAStyle.css](3DLASWeb/src/LAStyle.css)
+5. To modify the back-end process, edit [Pgquery](3DLASWeb/pgquery.py)
 
