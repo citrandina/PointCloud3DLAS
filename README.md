@@ -41,7 +41,7 @@ To run the web program:
    createdb -U postgres ladm_data
    pg_restore -U postgres -d ladm_data ladm_sample.sql
    ```
-   3. to import your new csv output from previous method:
+   3. to import your new csv output from previous method, run the following SQL query:
    ```sh
    #Import the output csv in synth_pc table
    COPY synth_pc (point_id, room_id, floor_number, x, y, z, name, su_id, area, k_id)
