@@ -29,8 +29,8 @@ def get_db_connection():
 def get_addresses(query: Optional[str] = Query(None)):
     conn = get_db_connection()
     cur = conn.cursor()
+    # Get all unique addresses or filter by a name query
     if query:
-        # Use ILIKE for case-insensitive matching in PostgreSQL
         cur.execute("SELECT DISTINCT name FROM synth_pc WHERE name ILIKE %s ORDER BY name", (f"%{query}%",))
     else:
         cur.execute("SELECT DISTINCT name FROM synth_pc ORDER BY name")
@@ -43,6 +43,7 @@ def get_addresses(query: Optional[str] = Query(None)):
 def get_baunits(name: str):
     conn = get_db_connection()
     cur = conn.cursor()
+    # Get all BAUnits (BAU) for a given address name
     cur.execute("""
         SELECT DISTINCT bau_id 
         FROM la_su_table 
@@ -58,6 +59,7 @@ def get_baunits(name: str):
 def get_spatialunits(name: str, bau:str):
     conn = get_db_connection()
     cur = conn.cursor()
+    # Get all Spatial Units for a given address and BAU
     cur.execute("""
         SELECT DISTINCT su_id 
         FROM la_su_table 
@@ -68,10 +70,12 @@ def get_spatialunits(name: str, bau:str):
     cur.close()
     conn.close()
     return spatialunits
+
 @app.get("/rooms")
 def get_rooms(su_id: int):
     conn = get_db_connection()
     cur = conn.cursor()
+    # Get room IDs for a given Spatial Unit (SU)
     cur.execute("""
         SELECT DISTINCT room_id 
         FROM synth_pc 
@@ -82,10 +86,12 @@ def get_rooms(su_id: int):
     cur.close()
     conn.close()
     return rooms
+
 @app.get("/room-points-all")
 def get_points_by_su(su_id: str):
     conn = get_db_connection()
     cur = conn.cursor()
+    # Get 3D points for all rooms in a given Spatial Unit, transformed to WGS84
     cur.execute("""
         SELECT 
             ST_X(geom_wgs), ST_Y(geom_wgs), z
@@ -101,6 +107,7 @@ def get_points_by_su(su_id: str):
 
 
 def extract_date(date_str):
+    # function to extract date portion from a datetime string
     return date_str.split()[0] if date_str and " " in date_str else (date_str or "")
 
 @app.get("/building-bbox")
@@ -108,7 +115,7 @@ def get_building_bbox(name: str):
     conn = get_db_connection()
     cur = conn.cursor()
 
-    # Step 1: Transform all x/y to WGS84 (EPSG:4326), then get bounding box
+    # Transform all x/y to WGS84 (EPSG:4326), then get bounding box
     cur.execute("""
         SELECT 
             MIN(ST_X(geom_wgs)) as min_lon,
@@ -182,7 +189,7 @@ def update_all(data: AllData):
     conn = get_db_connection()
     cur = conn.cursor()
 
-    # ✅ Save all parties
+    # 1. Insert or update parties
     for party in data.parties:
         cur.execute("""
             INSERT INTO la_party_table (p_id, party_name, ext_id)
@@ -192,7 +199,7 @@ def update_all(data: AllData):
                 ext_id = EXCLUDED.ext_id
         """, (party.p_id, party.party_name, party.ext_id))
 
-    # ✅ Save all rights
+    # 2. Insert or update rights
     for right in data.rights:
         cur.execute("""
             INSERT INTO la_right_table (r_id, la_righttype, share, begin_lifespan, end_lifespan, p_id)
@@ -208,7 +215,7 @@ def update_all(data: AllData):
             right.begin_lifespan, right.end_lifespan, right.p_id
         ))
 
-    # ✅ Save multiple BAUs
+    # 3. Insert or update BAUs
     for bau in data.bau:
         cur.execute("SELECT id FROM la_bau_table WHERE bau_id = %s AND r_id = %s", (bau.bau_id, bau.r_id))
         row = cur.fetchone()
@@ -241,8 +248,7 @@ def update_all(data: AllData):
                 bau.end_lifespan
             ))
 
-    # ✅ Save SU (spatial unit)
-    # ✅ Corrected SU insert statement
+    # 4. Insert or update Spatial Unit (SU)
     cur.execute("""
         INSERT INTO la_su_table (su_id, label, ext_adressid, computed_area, bau_id, surfacerelation)
         VALUES (%s, %s, %s, %s, %s, %s)
@@ -273,7 +279,7 @@ def load_by_bau(su_id: str = Query(...)):
     cur = conn.cursor()
 
     try:
-        # 🔹 1. Load SU
+        #  1. Load SU
         cur.execute("SELECT * FROM la_su_table WHERE su_id = %s", (su_id,))
         su_row = cur.fetchone()
         if not su_row:
@@ -281,15 +287,13 @@ def load_by_bau(su_id: str = Query(...)):
         su = dict(zip([desc[0] for desc in cur.description], su_row))
         bau_id = su["bau_id"]
 
-        # 🔹 2. Load BAU records — all rows for this bau_id
+        # 2. Load BAU records — all rows for this bau_id
         cur.execute("SELECT * FROM la_bau_table WHERE bau_id = %s", (bau_id,))
         bau_rows = cur.fetchall()
         bau_data = [dict(zip([desc[0] for desc in cur.description], row)) for row in bau_rows]
-
-        # If needed: send a representative BAU record (e.g. for metadata)
         bau_summary = bau_data[0] if bau_data else {}
 
-        # 🔹 3. Load rights linked to this BAU
+        # 3. Load rights linked to this BAU
         r_ids = tuple(row["r_id"] for row in bau_data if row.get("r_id"))
         rights = []
         if r_ids:
@@ -297,7 +301,7 @@ def load_by_bau(su_id: str = Query(...)):
             cur.execute(query, (r_ids,))
             rights = [dict(zip([desc[0] for desc in cur.description], row)) for row in cur.fetchall()]
 
-        # 🔹 4. Load parties for those rights
+        # 4. Load parties for those rights
         p_ids = tuple(set(r["p_id"] for r in rights if r.get("p_id")))
         parties = []
         if p_ids:
@@ -305,13 +309,13 @@ def load_by_bau(su_id: str = Query(...)):
             cur.execute(query, (p_ids,))
             parties = [dict(zip([desc[0] for desc in cur.description], row)) for row in cur.fetchall()]
 
-        # 🔹 5. All spatial units under the same BAU
+        #  5. All spatial units under the same BAU
         cur.execute("SELECT * FROM la_su_table WHERE bau_id = %s", (bau_id,))
         sus = [dict(zip([desc[0] for desc in cur.description], row)) for row in cur.fetchall()]
 
         return {
-            "bau": bau_summary,     # single summary object, for form display
-            "bau_rows": bau_data,   # full array if you want to track all r_id links
+            "bau": bau_summary,
+            "bau_rows": bau_data,
             "rights": rights,
             "parties": parties,
             "sus": sus
@@ -326,6 +330,7 @@ def load_by_bau(su_id: str = Query(...)):
 def search_parties(query: str):
     conn = get_db_connection()
     cur = conn.cursor()
+    # 1. Perform a case-insensitive partial match on party_name
     cur.execute("""
         SELECT p_id, party_name, ext_id 
         FROM la_party_table 
@@ -333,6 +338,7 @@ def search_parties(query: str):
         ORDER BY party_name
         LIMIT 10
     """, (f"%{query}%",))
+    # 2. Fetch matched parties and convert each row to a dictionary
     parties = [dict(zip([desc[0] for desc in cur.description], row)) for row in cur.fetchall()]
     cur.close()
     conn.close()
@@ -344,14 +350,17 @@ def get_next_ids():
     conn = get_db_connection()
     cur = conn.cursor()
 
+    # 1. Extract the maximum numeric suffix from existing p_id values (e.g., p_1, p_2, ...)
     cur.execute("SELECT MAX(CAST(SUBSTRING(p_id FROM '[0-9]+') AS INTEGER)) FROM la_party_table")
     max_pid = cur.fetchone()[0] or 0
 
+    # 2. Extract the maximum numeric suffix from existing r_id values (e.g., r_1, r_2, ...)
     cur.execute("SELECT MAX(CAST(SUBSTRING(r_id FROM '[0-9]+') AS INTEGER)) FROM la_right_table")
     max_rid = cur.fetchone()[0] or 0
 
     cur.close()
     conn.close()
+    # 3. Return the next available IDs by incrementing the highest existing suffix
     return {
         "next_p_id": f"p_{max_pid + 1}",
         "next_r_id": f"r_{max_rid + 1}"
@@ -403,7 +412,6 @@ def get_nearest_attribute(
     height: float = Query(...)
 ):
     adjusted_height = height - 2.0
-
     conn = get_db_connection()
     cur = conn.cursor()
 
@@ -423,7 +431,6 @@ def get_nearest_attribute(
         row = cur.fetchone()
         if not row:
             return {"error": "No nearby point found"}
-
         x, y, z, lon, lat, room_id, su_id = row
 
         # Load clicked SU info
@@ -435,7 +442,6 @@ def get_nearest_attribute(
             "computed_area": su_row[2],
             "bau_id": su_row[3]
         } if su_row else {}
-
         bau_id = su_info.get("bau_id")
 
         # Load other SUs in the same BAU
@@ -463,7 +469,6 @@ def get_nearest_attribute(
             }
             for r_id, la_righttype, p_id, party_name in cur.fetchall()
         ]
-
         return {
             "x": x,
             "y": y,
@@ -476,13 +481,9 @@ def get_nearest_attribute(
             "other_sus": other_sus,
             "rights": right_party_pairs
         }
-
     finally:
         cur.close()
         conn.close()
-
-
-
 
 @app.get("/room-points-bau")
 def get_points_by_bau(su_id: str):
@@ -557,13 +558,14 @@ def get_bau_points(bau_id: str):
     finally:
         cur.close()
         conn.close()
+
 @app.get("/load-by-bau-id")
 def load_by_bau_id(bau_id: str = Query(...)):
     conn = get_db_connection()
     cur = conn.cursor()
 
     try:
-        # 1️⃣ Get all BAU records
+        # 1️. Get all BAU records
         cur.execute("SELECT * FROM la_bau_table WHERE bau_id = %s", (bau_id,))
         bau_rows = cur.fetchall()
         if not bau_rows:
@@ -571,21 +573,21 @@ def load_by_bau_id(bau_id: str = Query(...)):
         bau_data = [dict(zip([desc[0] for desc in cur.description], row)) for row in bau_rows]
         bau_summary = bau_data[0]  # First record as summary
 
-        # 2️⃣ Get rights linked to this BAU
+        # 2️. Get rights linked to this BAU
         r_ids = tuple(row["r_id"] for row in bau_data if row.get("r_id"))
         rights = []
         if r_ids:
             cur.execute("SELECT * FROM la_right_table WHERE r_id IN %s", (r_ids,))
             rights = [dict(zip([desc[0] for desc in cur.description], row)) for row in cur.fetchall()]
 
-        # 3️⃣ Get parties linked to rights
+        # 3️. Get parties linked to rights
         p_ids = tuple(set(r["p_id"] for r in rights if r.get("p_id")))
         parties = []
         if p_ids:
             cur.execute("SELECT * FROM la_party_table WHERE p_id IN %s", (p_ids,))
             parties = [dict(zip([desc[0] for desc in cur.description], row)) for row in cur.fetchall()]
 
-        # 4️⃣ Get SUs under this BAU
+        # 4️. Get SUs under this BAU
         cur.execute("SELECT * FROM la_su_table WHERE bau_id = %s", (bau_id,))
         sus = [dict(zip([desc[0] for desc in cur.description], row)) for row in cur.fetchall()]
 
@@ -596,7 +598,6 @@ def load_by_bau_id(bau_id: str = Query(...)):
             "parties": parties,
             "sus": sus
         }
-
     finally:
         cur.close()
         conn.close()
