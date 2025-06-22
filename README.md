@@ -35,7 +35,7 @@ This second part is documented in [3DLASWeb](3DLASWeb) involving the last two st
 
 To run the web program:
 1. Set the database in pgAdmin
-   1. download the sample database in [OneDrive](https://tud365-my.sharepoint.com/:u:/r/personal/candinasari_tudelft_nl/Documents/data%20thesis/ladm_sample.sql?csf=1&web=1&e=b21AQC)
+   1. download the sample database in [OneDrive](https://drive.google.com/file/d/1YOkyEus1ibRDXM3h6cEZJEjUol1VQeQO/view?usp=sharing)
    2. create new database and import the database. in cmd, run:
    ```sh
    createdb -U postgres ladm_data
